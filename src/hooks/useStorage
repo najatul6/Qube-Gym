@@ -1,0 +1,116 @@
+import { useEffect, useState, useCallback } from "react"
+import { subscribe, KEYS, authStore, bookingStore, trainerBookingStore } from "@/utils/storage"
+
+/**
+ * Subscribe a React component to a localStorage-backed slice.
+ * Re-renders whenever the underlying store emits a change.
+ */
+export function useStorage(key, selector = (v) => v) {
+  const read = () => {
+    try {
+      const raw = localStorage.getItem(key)
+      return selector(raw ? JSON.parse(raw) : null)
+    } catch {
+      return selector(null)
+    }
+  }
+
+  const [state, setState] = useState(read)
+
+  useEffect(() => {
+    setState(read())
+    const unsub = subscribe(key, (value) => setState(selector(value)))
+    return unsub
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
+
+  return state
+}
+
+/**
+ * Returns the current authenticated user (or null) and re-renders on
+ * session / users changes.
+ */
+export function useUser() {
+  const [user, setUser] = useState(() => authStore.currentUser())
+
+  useEffect(() => {
+    const update = () => setUser(authStore.currentUser())
+    update()
+    const u1 = subscribe(KEYS.SESSION, update)
+    const u2 = subscribe(KEYS.USERS, update)
+    const u3 = subscribe(KEYS.USER, update)
+    return () => { u1(); u2(); u3() }
+  }, [])
+
+  return user
+}
+
+/**
+ * Auth hook — provides the current user plus signup/signin/signout actions.
+ */
+export function useAuth() {
+  const user = useUser()
+  return {
+    user,
+    isAuthenticated: !!user,
+    signup: authStore.signup,
+    signin: authStore.signin,
+    signout: authStore.signout,
+  }
+}
+
+/**
+ * Returns the current user's class bookings and re-renders on any
+ * bookings / session / users change.
+ */
+export function useBookings() {
+  const [bookings, setBookings] = useState(() => bookingStore.all())
+
+  useEffect(() => {
+    const update = () => setBookings(bookingStore.all())
+    update()
+    const u1 = subscribe(KEYS.BOOKINGS, update)
+    const u2 = subscribe(KEYS.SESSION, update)
+    const u3 = subscribe(KEYS.USERS, update)
+    return () => { u1(); u2(); u3() }
+  }, [])
+
+  return bookings
+}
+
+/**
+ * Returns the current user's trainer (1-on-1) bookings.
+ */
+export function useTrainerBookings() {
+  const [bookings, setBookings] = useState(() => trainerBookingStore.all())
+
+  useEffect(() => {
+    const update = () => setBookings(trainerBookingStore.all())
+    update()
+    const u1 = subscribe(KEYS.TRAINER_BOOKINGS, update)
+    const u2 = subscribe(KEYS.SESSION, update)
+    const u3 = subscribe(KEYS.USERS, update)
+    return () => { u1(); u2(); u3() }
+  }, [])
+
+  return bookings
+}
+
+export function useMessages() {
+  return useStorage(KEYS.MESSAGES, (v) => (Array.isArray(v) ? v : []))
+}
+
+export function useTrainers() {
+  return useStorage(KEYS.TRAINERS, (v) => (Array.isArray(v) ? v : []))
+}
+
+export function useClasses() {
+  return useStorage(KEYS.CLASSES, (v) => (Array.isArray(v) ? v : []))
+}
+
+/** Force a re-render of any component (handy after manual store writes). */
+export function useForceUpdate() {
+  const [, set] = useState(0)
+  return useCallback(() => set((n) => n + 1), [])
+}
